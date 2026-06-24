@@ -1,0 +1,131 @@
+- name: Provisionar ambiente completo do Projeto Korp
+  hosts: korp
+  become: true
+
+  vars:
+    projeto_dir: "{{ playbook_dir }}/.."
+    docker_network_name: korp-network
+    app_container_name: http-server-projeto-korp
+    app_port: 8080
+    prometheus_container_name: prometheus
+    prometheus_scrape_interval: 5s
+
+  tasks:
+
+    - name: Verificar se o Docker já está instalado
+      ansible.builtin.command: docker --version
+      register: docker_check
+      ignore_errors: true
+      changed_when: false
+
+    - name: Instalar dependências do repositório Docker
+      ansible.builtin.apt:
+        name: [ca-certificates, curl, gnupg]
+        state: present
+        update_cache: true
+      when: docker_check.rc != 0
+
+    - name: Criar diretório para chaves apt
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+      when: docker_check.rc != 0
+
+    - name: Baixar chave GPG oficial do Docker
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        mode: "0644"
+      when: docker_check.rc != 0
+
+    - name: Adicionar repositório oficial do Docker
+      ansible.builtin.apt_repository:
+        repo: >-
+          deb [arch={{ ansible_architecture | replace('x86_64', 'amd64') }}
+          signed-by=/etc/apt/keyrings/docker.asc]
+          https://download.docker.com/linux/ubuntu
+          {{ ansible_distribution_release }} stable
+        state: present
+        filename: docker
+      when: docker_check.rc != 0
+
+    - name: Instalar Docker Engine, CLI e plugin do Compose
+      ansible.builtin.apt:
+        name: [docker-ce, docker-ce-cli, containerd.io, docker-compose-plugin]
+        state: present
+        update_cache: true
+      when: docker_check.rc != 0
+
+    - name: Garantir que o serviço Docker está ativo e habilitado no boot
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Adicionar usuário ao grupo docker
+      ansible.builtin.user:
+        name: "{{ ansible_user_id }}"
+        groups: docker
+        append: true
+      when: ansible_user_id != "root"
+
+    - name: Criar rede Docker bridge ({{ docker_network_name }})
+      community.docker.docker_network:
+        name: "{{ docker_network_name }}"
+        driver: bridge
+        state: present
+
+    - name: Configurar NGINX — gerar arquivo de proxy reverso a partir do template
+      ansible.builtin.template:
+        src: templates/nginx.conf.j2
+        dest: "{{ projeto_dir }}/nginx/http-server-projeto-korp.conf"
+        mode: "0644"
+
+    - name: Configurar Prometheus — gerar prometheus.yml a partir do template
+      ansible.builtin.template:
+        src: templates/prometheus.yml.j2
+        dest: "{{ projeto_dir }}/prometheus/prometheus.yml"
+        mode: "0644"
+
+    - name: Configurar Grafana — gerar datasource a partir do template
+      ansible.builtin.template:
+        src: templates/grafana-datasource.yml.j2
+        dest: "{{ projeto_dir }}/grafana/provisioning/datasources/datasources.yml"
+        mode: "0644"
+
+    - name: Build da imagem Docker do http-server-projeto-korp
+      community.docker.docker_image:
+        name: "{{ app_container_name }}"
+        build:
+          path: "{{ projeto_dir }}/http-server"
+        source: build
+        force_source: true
+
+    - name: Subir todos os containers via docker compose
+      community.docker.docker_compose_v2:
+        project_src: "{{ projeto_dir }}"
+        state: present
+        build: never   
+
+    - name: Aguardar o nginx ficar disponível na porta 80
+      ansible.builtin.wait_for:
+        host: localhost
+        port: 80
+        delay: 3
+        timeout: 60
+
+    - name: Validar o serviço — requisição GET /projeto-korp via nginx
+      ansible.builtin.uri:
+        url: "http://localhost:80/projeto-korp"
+        method: GET
+        return_content: true
+        status_code: 200
+      register: resposta_servico
+      retries: 5
+      delay: 3
+      until: resposta_servico.status == 200
+
+    - name: Exibir resposta do serviço no console
+      ansible.builtin.debug:
+        msg: "Resposta do {{ app_container_name }}: {{ resposta_servico.content }}"
