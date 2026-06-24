@@ -4,6 +4,27 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+)
+
+
+
+var (
+	httpRequestsTotal = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "http_requests_total",
+			Help: "Total de requisições HTTP",
+		},
+	)
+
+	serviceUp = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "service_up",
+			Help: "Disponibilidade do serviço (1 up, 0 down)",
+		},
+	)
 )
 
 type Response struct {
@@ -11,11 +32,19 @@ type Response struct {
 	Horario string `json:"horario"`
 }
 
+func init() {
+	prometheus.MustRegister(httpRequestsTotal)
+	prometheus.MustRegister(serviceUp)
+	serviceUp.Set(1)
+}
+
 func projetoKorpHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
 		return
 	}
+
+	httpRequestsTotal.Inc()
 
 	response := Response{
 		Nome:    "Projeto Korp",
@@ -29,6 +58,7 @@ func projetoKorpHandler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	http.HandleFunc("/projeto-korp", projetoKorpHandler)
+	http.Handle("/metrics", promhttp.Handler())
 
 	println("Servidor iniciado na porta 8080")
 
