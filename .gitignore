@@ -1,0 +1,10 @@
+http-server/go.sum
+
+http-server/http-server-projeto-korp
+
+grafana-data/
+prometheus-data/
+
+.env
+
+.DS_Store
