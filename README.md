@@ -1,4 +1,4 @@
-# desafio_korp
+## Automação de provisionamento com Ansible
 
 Projeto de observabilidade com um serviço HTTP em Go, nginx na frente, coleta de métricas com Prometheus e painel no Grafana. O ambiente pode ser provisionado manualmente com Docker Compose ou automaticamente com Ansible.
 
