@@ -3,7 +3,7 @@ server {
     server_name localhost;
 
     location /projeto-korp {
-        proxy_pass http://\{\{ app_container_name }}:{{ app_port }}/projeto-korp;
+        proxy_pass http://{{ app_container_name }}:{{ app_port }}/projeto-korp;
 
         proxy_set_header Host              $host;
         proxy_set_header X-Real-IP         $remote_addr;
@@ -12,7 +12,7 @@ server {
     }
 
     location /metrics {
-        proxy_pass http://\{\{ app_container_name }}:{{ app_port }}/metrics;
+        proxy_pass http://{{ app_container_name }}:{{ app_port }}/metrics;
         proxy_set_header Host $host;
     }
 }
