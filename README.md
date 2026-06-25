@@ -56,7 +56,7 @@ Exemplo:
 
 ```bash
 cd ansible
-ansible-playbook -i inventory.ini playbook.yml
+ansible-playbook -i inventory.ini playbook.yml --ask-become-pass
 ```
 
 ## Endpoints
